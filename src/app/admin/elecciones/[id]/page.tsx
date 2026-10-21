@@ -25,7 +25,7 @@ export default async function EleccionPage({ params }: { params: Promise<{ id: s
   const [standingsRes, candidatesRes, ecRes, votesValid, votesVoided, adjRes, logsRes, snapshotsRes, operatorsRes, assignedRes, profilesRes] =
     await Promise.all([
       supabase.rpc("election_standings", { p_election_id: id }),
-      supabase.from("candidates").select("*").eq("department_id", election.department_id).order("full_name").returns<Candidate[]>(),
+      supabase.from("candidates").select("*").eq("department_id", election.department_id).order("numero").returns<Candidate[]>(),
       supabase.from("election_candidates").select("candidate_id, ballot_order, withdrawn_at, withdraw_reason").eq("election_id", id).order("ballot_order"),
       supabase.from("votes").select("id", { count: "exact", head: true }).eq("election_id", id).is("voided_at", null),
       supabase.from("votes").select("id", { count: "exact", head: true }).eq("election_id", id).not("voided_at", "is", null),
@@ -125,7 +125,7 @@ export default async function EleccionPage({ params }: { params: Promise<{ id: s
               <h2 className="font-display mb-3 text-lg font-bold text-navy-900">Candidatos en la papeleta</h2>
               <CandidateSelector
                 electionId={id}
-                candidates={candidates.map((c) => ({ id: c.id, full_name: c.full_name, active: c.active, photo_url: c.photo_path ? (photos[c.photo_path] ?? null) : null }))}
+                candidates={candidates.map((c) => ({ id: c.id, numero: c.numero, full_name: c.full_name, active: c.active, photo_url: c.photo_path ? (photos[c.photo_path] ?? null) : null }))}
                 selected={(ecRes.data ?? []).filter((r) => !r.withdrawn_at).map((r) => r.candidate_id as string)}
               />
             </section>
@@ -199,7 +199,7 @@ export default async function EleccionPage({ params }: { params: Promise<{ id: s
               <p className="mb-3 text-xs text-muted">Retirar a alguien lo quita de la papeleta; sus votos se conservan y vuelven a contar si lo restauras.</p>
               <CandidatesManager
                 electionId={id}
-                active={standings.map((s) => ({ candidate_id: s.candidate_id, full_name: s.full_name }))}
+                active={[...standings].sort((a, b) => a.numero - b.numero).map((s) => ({ candidate_id: s.candidate_id, numero: s.numero, full_name: s.full_name }))}
                 withdrawn={withdrawn}
               />
             </section>

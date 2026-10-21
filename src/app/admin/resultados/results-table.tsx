@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { Avatar, EmptyState, StatusBadge } from "@/components/ui";
+import { Avatar, EmptyState, NumberBadge, StatusBadge } from "@/components/ui";
 import { cargoLabel, STATUS_LABEL } from "@/lib/format";
 import type { ElectionStatus, ResultRow } from "@/lib/types";
 
@@ -90,6 +90,7 @@ export default function ResultsTable({ rows }: { rows: Row[] }) {
             <table className="w-full text-left text-sm">
               <thead className="bg-navy-50 text-xs uppercase tracking-wide text-navy-800">
                 <tr>
+                  <th className="px-4 py-3 text-center">Nº</th>
                   <th className="px-4 py-3">Fotografía</th>
                   <th className="px-4 py-3">Candidato</th>
                   <th className="px-4 py-3">Departamento</th>
@@ -102,6 +103,9 @@ export default function ResultsTable({ rows }: { rows: Row[] }) {
               <tbody className="divide-y divide-line">
                 {filtered.map((r) => (
                   <tr key={`${r.election_id}-${r.candidate_id}`} className="hover:bg-paper">
+                    <td className="px-4 py-2.5 text-center">
+                      <NumberBadge n={r.numero} size="sm" />
+                    </td>
                     <td className="px-4 py-2.5">
                       <Avatar name={r.full_name} url={r.photo_url} size={40} />
                     </td>
@@ -134,6 +138,7 @@ export default function ResultsTable({ rows }: { rows: Row[] }) {
             {filtered.map((r) => (
               <li key={`${r.election_id}-${r.candidate_id}`} className="card p-4">
                 <div className="flex items-center gap-3">
+                  <NumberBadge n={r.numero} size="md" />
                   <Avatar name={r.full_name} url={r.photo_url} size={52} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-ink">{r.full_name}</p>

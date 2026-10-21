@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Avatar } from "@/components/ui";
+import { Avatar, NumberBadge } from "@/components/ui";
 import { CargoAssigner } from "@/components/cargo-assigner";
 import { createClient } from "@/lib/supabase/client";
 import { errorMessage, formatDateTime } from "@/lib/format";
@@ -181,7 +181,7 @@ export function CandidateSelector({
   selected,
 }: {
   electionId: string;
-  candidates: { id: string; full_name: string; photo_url: string | null; active: boolean }[];
+  candidates: { id: string; numero: number; full_name: string; photo_url: string | null; active: boolean }[];
   selected: string[];
 }) {
   const { pending, result, run } = useAction();
@@ -198,6 +198,7 @@ export function CandidateSelector({
           <li key={c.id}>
             <label className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 ${chosen.includes(c.id) ? "border-navy-600 bg-navy-50" : "border-line"}`}>
               <input type="checkbox" checked={chosen.includes(c.id)} onChange={() => toggle(c.id)} />
+              <NumberBadge n={c.numero} size="sm" />
               <Avatar name={c.full_name} url={c.photo_url} size={36} />
               <span className="min-w-0 truncate text-sm font-medium">
                 {c.full_name}
@@ -207,7 +208,7 @@ export function CandidateSelector({
           </li>
         ))}
       </ul>
-      <p className="text-xs text-muted">El orden de la papeleta sigue el orden en que los marques.</p>
+      <p className="text-xs text-muted">La papeleta sigue el número de cada candidato.</p>
       <button className="btn-primary" disabled={pending} onClick={() => run(() => setElectionCandidates(electionId, chosen))}>
         {pending ? "Guardando…" : `Guardar candidatos (${chosen.length})`}
       </button>
@@ -275,7 +276,7 @@ export function CandidatesManager({
   withdrawn,
 }: {
   electionId: string;
-  active: { candidate_id: string; full_name: string }[];
+  active: { candidate_id: string; numero: number; full_name: string }[];
   withdrawn: WithdrawnCandidate[];
 }) {
   const router = useRouter();
@@ -302,7 +303,9 @@ export function CandidatesManager({
         {active.map((c) => (
           <li key={c.candidate_id} className="py-2 text-sm">
             <div className="flex items-center justify-between gap-2">
-              <span className="font-medium text-ink">{c.full_name}</span>
+              <span className="font-medium text-ink">
+                Nº {c.numero} — {c.full_name}
+              </span>
               {target !== c.candidate_id && (
                 <button className="text-xs font-semibold text-red-700 hover:underline" onClick={() => setTarget(c.candidate_id)}>
                   Retirar

@@ -81,6 +81,24 @@ export function Avatar({ name, url, size = 56 }: { name: string; url?: string | 
   );
 }
 
+/** Número del candidato (casilla), bien visible. */
+export function NumberBadge({ n, size = "md" }: { n: number; size?: "sm" | "md" | "lg" }) {
+  const cls = {
+    sm: "h-8 min-w-8 rounded-lg text-base",
+    md: "h-11 min-w-11 rounded-xl text-2xl",
+    lg: "h-16 min-w-16 rounded-2xl text-4xl",
+  }[size];
+  return (
+    <span
+      aria-label={`Número ${n}`}
+      title={`Número ${n}`}
+      className={`font-display inline-flex shrink-0 items-center justify-center bg-navy-900 px-1.5 font-extrabold leading-none text-white tabular-nums ${cls}`}
+    >
+      {n}
+    </span>
+  );
+}
+
 export function StatCard({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
   return (
     <div className="card p-4 sm:p-5">

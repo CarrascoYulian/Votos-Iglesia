@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ActionForm } from "@/components/action-form";
 import { AuditList } from "@/components/audit-list";
 import { StandingsList } from "@/components/standings";
-import { Avatar, PageHeader, ResultKindBadge, StatusBadge } from "@/components/ui";
+import { Avatar, NumberBadge, PageHeader, ResultKindBadge, StatusBadge } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
 import { signPhotos } from "@/lib/photos";
@@ -20,7 +20,7 @@ export default async function DepartamentoPage({ params }: { params: Promise<{ i
   if (!department) notFound();
 
   const [{ data: candidates }, { data: elections }, { data: logs }] = await Promise.all([
-    supabase.from("candidates").select("*").eq("department_id", id).order("full_name").returns<Candidate[]>(),
+    supabase.from("candidates").select("*").eq("department_id", id).order("numero").returns<Candidate[]>(),
     supabase.from("elections").select("*").eq("department_id", id).order("created_at", { ascending: false }).returns<Election[]>(),
     supabase.from("audit_logs").select("*").eq("department_id", id).order("created_at", { ascending: false }).limit(30).returns<AuditLog[]>(),
   ]);
@@ -87,6 +87,7 @@ export default async function DepartamentoPage({ params }: { params: Promise<{ i
                 {candidates.map((c) => (
                   <li key={c.id} className="py-3">
                     <div className="flex items-center gap-3">
+                      <NumberBadge n={c.numero} size="lg" />
                       <Avatar name={c.full_name} url={c.photo_path ? photos[c.photo_path] : null} size={56} />
                       <div className="min-w-0 flex-1">
                         <p className="font-semibold text-ink">
@@ -120,7 +121,10 @@ export default async function DepartamentoPage({ params }: { params: Promise<{ i
                   <input name="full_name" className="input" placeholder="Nombre completo" required aria-label="Nombre completo" />
                   <input name="notes" className="input" placeholder="Notas (opcional)" aria-label="Notas" />
                 </ActionForm>
-                <p className="mt-2 text-xs text-muted">Después de agregarlo puedes subir su fotografía.</p>
+                <p className="mt-2 text-xs text-muted">
+                  Recibirá el número <strong className="text-ink">{(candidates?.reduce((m, c) => Math.max(m, c.numero), 0) ?? 0) + 1}</strong>{" "}
+                  (los números van en el orden en que se agregan y no cambian). Después puedes subir su fotografía.
+                </p>
               </div>
             )}
           </section>

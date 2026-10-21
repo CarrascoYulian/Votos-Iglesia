@@ -1,4 +1,4 @@
-import { Avatar } from "@/components/ui";
+import { Avatar, NumberBadge } from "@/components/ui";
 import { cargoLabel, votesLabel } from "@/lib/format";
 import type { ElectionStatus, Standing } from "@/lib/types";
 
@@ -22,7 +22,8 @@ export function StandingsList({
         const pct = total ? Math.round((s.votes / total) * 1000) / 10 : 0;
         return (
           <li key={s.candidate_id} className="flex items-center gap-3">
-            <span className="font-display w-7 shrink-0 text-center text-lg font-bold text-gold-700">{s.posicion}</span>
+            <span className="font-display w-8 shrink-0 text-center text-lg font-bold text-gold-700">{s.posicion}º</span>
+            <NumberBadge n={s.numero} size="md" />
             <Avatar name={s.full_name} url={s.photo_path ? photos[s.photo_path] : null} size={48} />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-2">

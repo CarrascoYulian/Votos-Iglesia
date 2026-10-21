@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { LifecycleControls } from "@/app/admin/elecciones/[id]/controls";
 import { CargoAssigner } from "@/components/cargo-assigner";
 import { cargoProblems, vacantCargos } from "@/lib/cargos";
-import { Avatar, ResultKindBadge } from "@/components/ui";
+import { Avatar, NumberBadge, ResultKindBadge } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { cargoLabel, errorMessage, formatTime } from "@/lib/format";
 import { newOperationId } from "@/lib/uuid";
@@ -81,11 +81,12 @@ export default function CountingBoard({
     () => ({ ...allNames, ...Object.fromEntries(standings.map((s) => [s.candidate_id, s.full_name])) }),
     [allNames, standings],
   );
-  // Las tarjetas mantienen el orden de la papeleta para que el operador no tenga que buscarlas.
-  const ballot = useMemo(
-    () => [...standings].sort((a, b) => a.ballot_order - b.ballot_order || a.full_name.localeCompare(b.full_name)),
-    [standings],
-  );
+  // Las tarjetas siguen el número del candidato (el que escribe el votante en el papel).
+  const ballot = useMemo(() => [...standings].sort((a, b) => a.numero - b.numero), [standings]);
+  const [quick, setQuick] = useState("");
+  const quickRef = useRef<HTMLInputElement>(null);
+  const quickMatch = quick ? ballot.find((s) => s.numero === Number(quick)) : undefined;
+  const numbers = useMemo(() => Object.fromEntries(standings.map((s) => [s.candidate_id, s.numero])), [standings]);
   const ranking = useMemo(() => [...standings].sort((a, b) => a.posicion - b.posicion || b.votes - a.votes), [standings]);
   const total = standings.reduce((sum, s) => sum + s.votes, 0);
   const removedCount = votes.filter((v) => v.voided_at).length;
@@ -207,10 +208,10 @@ export default function CountingBoard({
       setStandings((list) =>
         list.map((s) => (s.candidate_id === op.candidateId ? { ...s, votes: Number(data.candidate_votes) } : s)),
       );
-      pushToast("ok", `Voto registrado: ${names[op.candidateId]} (${Number(data.candidate_votes)})`);
+      pushToast("ok", `Voto registrado: Nº ${numbers[op.candidateId]} ${names[op.candidateId]} (${Number(data.candidate_votes)})`);
       scheduleRefresh();
     },
-    [supabase, election.id, names, pushToast, refresh, scheduleRefresh],
+    [supabase, election.id, names, numbers, pushToast, refresh, scheduleRefresh],
   );
 
   function addVote(candidateId: string) {
@@ -301,6 +302,14 @@ export default function CountingBoard({
   }, {});
   const failed = pending.filter((p) => p.state === "fallido");
 
+  function submitQuick(e: React.FormEvent) {
+    e.preventDefault();
+    if (!quickMatch) return;
+    addVote(quickMatch.candidate_id);
+    setQuick("");
+    quickRef.current?.focus();
+  }
+
   return (
     <main className="mx-auto max-w-7xl px-4 pb-28 pt-6">
       {/* Encabezado de la elección */}
@@ -386,36 +395,76 @@ export default function CountingBoard({
 
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
         <div className="min-w-0 space-y-6">
-          {/* Tarjetas con botón por candidato */}
+          {/* Entrada rápida: el papel trae el número del candidato */}
+          {open && (
+            <form onSubmit={submitQuick} className="card flex flex-col gap-3 p-4 sm:flex-row sm:items-center" aria-label="Registrar por número">
+              <label htmlFor="quick" className="text-sm font-semibold text-navy-900 sm:w-36">
+                Número leído en el papel
+              </label>
+              <input
+                id="quick"
+                ref={quickRef}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="off"
+                className="input w-full text-center font-display text-3xl font-extrabold sm:w-28"
+                value={quick}
+                onChange={(e) => setQuick(e.target.value.replace(/\D/g, "").slice(0, 3))}
+                placeholder="#"
+              />
+              <div className="flex min-h-12 flex-1 items-center gap-3">
+                {quickMatch ? (
+                  <>
+                    <Avatar name={quickMatch.full_name} url={photos[quickMatch.candidate_id]} size={44} />
+                    <span className="font-display truncate text-lg font-bold text-navy-900">{quickMatch.full_name}</span>
+                  </>
+                ) : (
+                  quick && <span className="text-sm font-semibold text-red-700">No hay candidato con el número {quick}</span>
+                )}
+              </div>
+              <button className="btn-gold py-3" disabled={!quickMatch}>
+                +1 voto (Enter)
+              </button>
+            </form>
+          )}
+
+          {/* Cartelera: número, foto y nombre de cada candidato */}
           <section aria-label="Registrar votos">
             <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
               {ballot.map((s) => {
                 const waiting = pendingByCandidate[s.candidate_id] ?? 0;
                 return (
-                  <article key={s.candidate_id} className="card flex flex-col p-4">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={s.full_name} url={photos[s.candidate_id]} size={64} />
-                      <div className="min-w-0 flex-1">
-                        <h2 className="font-display truncate text-base font-bold text-navy-900">{s.full_name}</h2>
-                        <p className={`text-xs font-medium ${s.tie_unresolved ? "text-amber-700" : "text-muted"}`}>
-                          {s.posicion}º · {cargoLabel(s, status)}
-                        </p>
+                  <article key={s.candidate_id} className="card flex flex-col overflow-hidden">
+                    <div className="flex items-stretch">
+                      <div className="flex w-24 shrink-0 flex-col items-center justify-center bg-navy-900 py-3 text-white sm:w-28">
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-navy-100">Nº</span>
+                        <span className="font-display text-6xl font-extrabold leading-none tabular-nums sm:text-7xl">{s.numero}</span>
                       </div>
-                      <div className="text-right">
-                        <p className="font-display text-3xl font-extrabold leading-none text-navy-900">{s.votes}</p>
-                        <p className="text-[11px] text-muted">{s.votes === 1 ? "voto" : "votos"}</p>
+                      <div className="flex min-w-0 flex-1 flex-col items-center gap-2 p-3 text-center">
+                        <Avatar name={s.full_name} url={photos[s.candidate_id]} size={88} />
+                        <h2 className="font-display w-full truncate text-base font-bold text-navy-900 sm:text-lg">{s.full_name}</h2>
                       </div>
                     </div>
+                    <div className="flex items-center justify-between gap-2 border-t border-line px-4 py-2">
+                      <p className={`min-w-0 truncate text-xs font-medium ${s.tie_unresolved ? "text-amber-700" : "text-muted"}`}>
+                        {s.posicion}º · {cargoLabel(s, status)}
+                      </p>
+                      <p className="shrink-0 text-right">
+                        <span className="font-display text-3xl font-extrabold leading-none text-navy-900">{s.votes}</span>
+                        <span className="ml-1 text-[11px] text-muted">{s.votes === 1 ? "voto" : "votos"}</span>
+                      </p>
+                    </div>
+                    <div className="px-4 pb-4">
                     {waiting > 0 && (
-                      <p className="mt-2 text-xs font-semibold text-amber-700">+{waiting} enviando / sin confirmar…</p>
+                      <p className="mb-1 text-xs font-semibold text-amber-700">+{waiting} enviando / sin confirmar…</p>
                     )}
                     <button
                       onClick={() => addVote(s.candidate_id)}
                       disabled={!open}
-                      className="btn-gold mt-4 w-full touch-manipulation py-4 text-base active:scale-[0.98]"
-                      aria-label={`Registrar un voto para ${s.full_name}`}
+                      className="btn-gold mt-1 w-full touch-manipulation py-4 text-base active:scale-[0.98]"
+                      aria-label={`Registrar un voto para el número ${s.numero}, ${s.full_name}`}
                     >
-                      +1 voto — {s.full_name}
+                      +1 voto — Nº {s.numero}
                     </button>
                     {open && (
                       <div className="mt-2 flex items-center justify-between gap-2">
@@ -435,6 +484,7 @@ export default function CountingBoard({
                         </button>
                       </div>
                     )}
+                    </div>
                   </article>
                 );
               })}
@@ -510,7 +560,8 @@ export default function CountingBoard({
             <ol className="space-y-2">
               {ranking.map((s) => (
                 <li key={s.candidate_id} className="flex items-center gap-3">
-                  <span className="font-display w-6 text-center text-sm font-bold text-gold-700">{s.posicion}</span>
+                  <span className="font-display w-6 text-center text-sm font-bold text-gold-700">{s.posicion}º</span>
+                  <NumberBadge n={s.numero} size="sm" />
                   <Avatar name={s.full_name} url={photos[s.candidate_id]} size={32} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-semibold text-ink">{s.full_name}</p>
@@ -538,6 +589,7 @@ export default function CountingBoard({
                   <li key={v.id} className="py-2 text-sm">
                     <div className="flex items-center justify-between gap-2">
                       <span className={v.voided_at ? "text-muted line-through" : "font-medium text-ink"}>
+                        {numbers[v.candidate_id] ? `Nº ${numbers[v.candidate_id]} — ` : ""}
                         {names[v.candidate_id] ?? "Candidato"}
                       </span>
                       <span className="text-xs text-muted">{formatTime(v.created_at)}</span>
@@ -595,7 +647,7 @@ export default function CountingBoard({
           <form onSubmit={submitDialog} className="card w-full max-w-md space-y-4 p-6">
             {dialog.dialog.kind === "quitar" && (
               <>
-                <h2 className="font-display text-lg font-bold text-navy-900">Quitar un voto a {names[dialog.dialog.candidateId]}</h2>
+                <h2 className="font-display text-lg font-bold text-navy-900">Quitar un voto al Nº {numbers[dialog.dialog.candidateId]} — {names[dialog.dialog.candidateId]}</h2>
                 <p className="text-sm text-muted">
                   {dialog.dialog.vote
                     ? `Se quitará el voto registrado a las ${formatTime(dialog.dialog.vote.created_at)}.`
@@ -626,7 +678,7 @@ export default function CountingBoard({
                       .filter((s) => dialog.dialog.kind === "reasignar" && s.candidate_id !== dialog.dialog.vote.candidate_id)
                       .map((s) => (
                         <option key={s.candidate_id} value={s.candidate_id}>
-                          {s.full_name}
+                          Nº {s.numero} — {s.full_name}
                         </option>
                       ))}
                   </select>
@@ -635,7 +687,7 @@ export default function CountingBoard({
             )}
             {dialog.dialog.kind === "retirar" && (
               <>
-                <h2 className="font-display text-lg font-bold text-navy-900">Retirar a {names[dialog.dialog.candidateId]}</h2>
+                <h2 className="font-display text-lg font-bold text-navy-900">Retirar al Nº {numbers[dialog.dialog.candidateId]} — {names[dialog.dialog.candidateId]}</h2>
                 <p className="text-sm text-muted">
                   Deja de aparecer en la papeleta y en la clasificación, y no recibe más votos. Sus votos se conservan y vuelven a contar
                   si lo restauras.

@@ -22,6 +22,8 @@ export interface Department {
 export interface Candidate {
   id: string;
   department_id: string;
+  /** Número del candidato: lo que escribe el votante en el papel. */
+  numero: number;
   full_name: string;
   notes: string | null;
   photo_path: string | null;
@@ -45,6 +47,7 @@ export interface Election {
 
 export interface Standing {
   candidate_id: string;
+  numero: number;
   full_name: string;
   photo_path: string | null;
   votes: number;
@@ -104,6 +107,7 @@ export interface ResultRow {
   department_id: string;
   department_name: string;
   candidate_id: string;
+  numero: number;
   full_name: string;
   photo_path: string | null;
   votes: number;

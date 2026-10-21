@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Avatar } from "@/components/ui";
+import { Avatar, NumberBadge } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { cargoProblems } from "@/lib/cargos";
 import { errorMessage, votesLabel } from "@/lib/format";
@@ -75,7 +75,8 @@ export function CargoAssigner({
           return (
             <li key={s.candidate_id} className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center">
               <div className="flex min-w-0 flex-1 items-center gap-3">
-                <span className="font-display w-6 text-center font-bold text-gold-700">{s.posicion}</span>
+                <span className="font-display w-7 text-center font-bold text-gold-700">{s.posicion}º</span>
+                <NumberBadge n={s.numero} size="sm" />
                 <Avatar name={s.full_name} url={photos[s.candidate_id]} size={36} />
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-semibold text-ink">{s.full_name}</span>

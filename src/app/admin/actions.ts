@@ -106,7 +106,7 @@ export async function createElection(departmentId: string, _: unknown, form: For
       .select("id")
       .eq("department_id", departmentId)
       .eq("active", true)
-      .order("full_name");
+      .order("numero");
     if (candidates?.length) {
       await supabase
         .from("election_candidates")
