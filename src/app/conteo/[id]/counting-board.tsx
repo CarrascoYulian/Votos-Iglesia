@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { LifecycleControls } from "@/app/admin/elecciones/[id]/controls";
 import { CargoAssigner } from "@/components/cargo-assigner";
+import { cargoProblems, vacantCargos } from "@/lib/cargos";
 import { Avatar, ResultKindBadge } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { cargoLabel, errorMessage, formatTime } from "@/lib/format";
@@ -464,7 +466,7 @@ export default function CountingBoard({
           )}
 
           {open && election.cargos.length > 0 && (
-            <section className="card p-4 sm:p-5" aria-label="Asignación de cargos">
+            <section className="card p-4 sm:p-5" aria-label="Asignación de cargos" id="cargos">
               <h2 className="font-display mb-2 text-lg font-bold text-navy-900">Asignación de cargos</h2>
               <CargoAssigner
                 electionId={election.id}
@@ -473,6 +475,28 @@ export default function CountingBoard({
                 photos={photos}
                 onChanged={refresh}
               />
+            </section>
+          )}
+          {open && (
+            <section className="card border-gold-500/40 bg-gold-50 p-4 sm:p-5" aria-label="Finalizar elección">
+              <h2 className="font-display mb-1 text-lg font-bold text-navy-900">Finalizar elección</h2>
+              <p className="mb-3 text-sm text-muted">
+                Cuando se hayan leído todos los papeles y estén asignados los cargos, cierra la elección para guardar los resultados
+                definitivos.
+              </p>
+              {isAdmin ? (
+                <LifecycleControls
+                  electionId={election.id}
+                  status={status}
+                  problems={cargoProblems(election.cargos, standings)}
+                  vacant={vacantCargos(election.cargos, standings)}
+                  totalVotes={total}
+                  showCountLink={false}
+                  onDone={refresh}
+                />
+              ) : (
+                <p className="text-sm font-medium text-navy-800">Avisa a un administrador para que cierre la elección.</p>
+              )}
             </section>
           )}
         </div>

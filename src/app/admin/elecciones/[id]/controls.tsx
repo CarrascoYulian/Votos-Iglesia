@@ -7,7 +7,7 @@ import { CargoAssigner } from "@/components/cargo-assigner";
 import { createClient } from "@/lib/supabase/client";
 import { errorMessage, formatDateTime } from "@/lib/format";
 import type { ActionResult, ElectionStatus, Standing, WithdrawnCandidate } from "@/lib/types";
-import { assignOperator, closeElection, reopenElection, setElectionCandidates, startElection } from "../../actions";
+import { assignOperator, closeElection, deleteElection, reopenElection, setElectionCandidates, startElection } from "../../actions";
 
 function Result({ result }: { result: ActionResult | null }) {
   if (!result) return null;
@@ -42,12 +42,16 @@ export function LifecycleControls({
   problems,
   vacant,
   totalVotes,
+  showCountLink = true,
+  onDone,
 }: {
   electionId: string;
   status: ElectionStatus;
   problems: string[];
   vacant: string[];
   totalVotes: number;
+  showCountLink?: boolean;
+  onDone?: () => void;
 }) {
   const { pending, result, run } = useAction();
   const [dialog, setDialog] = useState<null | "iniciar" | "cerrar" | "reabrir">(null);
@@ -59,6 +63,10 @@ export function LifecycleControls({
     setText("");
     setConfirmWord("");
   };
+  const done = () => {
+    close();
+    onDone?.();
+  };
 
   return (
     <div className="space-y-3">
@@ -69,10 +77,12 @@ export function LifecycleControls({
       )}
       {status === "en_curso" && (
         <>
-          <a href={`/conteo/${electionId}`} className="btn-primary w-full py-3">
-            Abrir pantalla de conteo
-          </a>
-          <button className="btn-outline w-full" onClick={() => setDialog("cerrar")} disabled={problems.length > 0}>
+          {showCountLink && (
+            <a href={`/conteo/${electionId}`} className="btn-primary w-full py-3">
+              Abrir pantalla de conteo
+            </a>
+          )}
+          <button className="btn-gold w-full py-3" onClick={() => setDialog("cerrar")} disabled={problems.length > 0}>
             Finalizar y cerrar elección
           </button>
           {problems.length > 0 && (
@@ -100,7 +110,7 @@ export function LifecycleControls({
                   <button className="btn-outline" onClick={close}>
                     Cancelar
                   </button>
-                  <button className="btn-gold" disabled={pending} onClick={() => run(() => startElection(electionId), close)}>
+                  <button className="btn-gold" disabled={pending} onClick={() => run(() => startElection(electionId), done)}>
                     {pending ? "Iniciando…" : "Sí, iniciar"}
                   </button>
                 </div>
@@ -132,7 +142,7 @@ export function LifecycleControls({
                   <button
                     className="btn-primary"
                     disabled={pending || confirmWord.trim().toUpperCase() !== "CERRAR"}
-                    onClick={() => run(() => closeElection(electionId, text), close)}
+                    onClick={() => run(() => closeElection(electionId, text), done)}
                   >
                     {pending ? "Cerrando…" : "Cerrar elección"}
                   </button>
@@ -150,7 +160,7 @@ export function LifecycleControls({
                   <button className="btn-outline" onClick={close}>
                     Cancelar
                   </button>
-                  <button className="btn-danger" disabled={pending || text.trim().length < 10} onClick={() => run(() => reopenElection(electionId, text), close)}>
+                  <button className="btn-danger" disabled={pending || text.trim().length < 10} onClick={() => run(() => reopenElection(electionId, text), done)}>
                     {pending ? "Reabriendo…" : "Reabrir"}
                   </button>
                 </div>
@@ -347,5 +357,85 @@ export function CandidatesManager({
       )}
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
     </div>
+  );
+}
+
+// ----------------------------------------------------------------------------- Eliminar elección
+export function DeleteElection({ electionId, title, totalVotes }: { electionId: string; title: string; totalVotes: number }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [confirmWord, setConfirmWord] = useState("");
+  const [password, setPassword] = useState("");
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function close() {
+    setOpen(false);
+    setConfirmWord("");
+    setPassword("");
+    setError(null);
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    start(async () => {
+      const r = await deleteElection(electionId, password, confirmWord);
+      setPassword("");
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      router.replace(r.departmentId ? `/admin/departamentos/${r.departmentId}` : "/admin");
+      router.refresh();
+    });
+  }
+
+  return (
+    <>
+      <button className="btn-danger w-full" onClick={() => setOpen(true)}>
+        Eliminar elección completa…
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/50 p-4 sm:items-center" role="dialog" aria-modal="true">
+          <form onSubmit={submit} className="card w-full max-w-md space-y-4 p-6">
+            <h2 className="font-display text-lg font-bold text-red-800">Eliminar “{title}”</h2>
+            <p className="text-sm text-muted">
+              Se borrarán <strong className="text-ink">todos sus votos ({totalVotes} válidos)</strong>, correcciones, cargos y resultados. Los
+              candidatos siguen en el departamento. <strong className="text-ink">No se puede deshacer.</strong> Quedará un registro en el
+              historial con el resumen de lo eliminado.
+            </p>
+            <div>
+              <label className="label" htmlFor="del-confirm">
+                Escribe BORRAR para confirmar
+              </label>
+              <input id="del-confirm" className="input" value={confirmWord} onChange={(e) => setConfirmWord(e.target.value)} autoComplete="off" />
+            </div>
+            <div>
+              <label className="label" htmlFor="del-pw">
+                Tu contraseña de administrador
+              </label>
+              <input
+                id="del-pw"
+                type="password"
+                className="input"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </div>
+            {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-outline" onClick={close} disabled={pending}>
+                Cancelar
+              </button>
+              <button className="btn-danger" disabled={pending || confirmWord.trim().toUpperCase() !== "BORRAR" || !password}>
+                {pending ? "Eliminando…" : "Eliminar definitivamente"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </>
   );
 }

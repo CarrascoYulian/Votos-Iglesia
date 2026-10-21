@@ -9,7 +9,7 @@ import { signPhotos } from "@/lib/photos";
 import { cargoProblems, vacantCargos } from "@/lib/cargos";
 import type { AuditLog, Candidate, Election, Profile, Standing, VoteAdjustment, WithdrawnCandidate } from "@/lib/types";
 import { updateElection } from "../../actions";
-import { AdminCargoAssigner, CandidateSelector, CandidatesManager, LifecycleControls, OperatorAssign } from "./controls";
+import { AdminCargoAssigner, CandidateSelector, CandidatesManager, DeleteElection, LifecycleControls, OperatorAssign } from "./controls";
 
 type ElectionRow = Election & { departments: { id: string; name: string } | null };
 type ResultSnapshot = { closing_number: number; full_name: string; votes: number; posicion: number; cargo: string | null; created_at: string };
@@ -239,6 +239,14 @@ export default async function EleccionPage({ params }: { params: Promise<{ id: s
                   <textarea id="notes" name="notes" defaultValue={election.notes ?? ""} className="input min-h-16" />
                 </div>
               </ActionForm>
+            </section>
+          )}
+
+          {isAdmin && (
+            <section className="card border-red-200 p-5">
+              <h2 className="font-display mb-1 text-lg font-bold text-red-800">Zona de peligro</h2>
+              <p className="mb-3 text-xs text-muted">Requiere escribir BORRAR y tu contraseña de administrador.</p>
+              <DeleteElection electionId={id} title={election.title} totalVotes={votesValid.count ?? 0} />
             </section>
           )}
 

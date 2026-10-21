@@ -26,6 +26,7 @@ No se pide ningún dato de los votantes.
 | Cargos | El 1er lugar (sin empate) recibe automáticamente el primer cargo de la lista (p. ej. Presidente). Los demás cargos los asigna quien está contando, al terminar los votos. Si hay empate en el 1er lugar, el operador elige a quién darle el primer cargo. |
 | Cierre | Solo se cierra con el primer cargo definido y sin cargos repetidos de más. Guarda una instantánea definitiva (`election_results`), quién cerró y cuándo, y bloquea nuevos votos. |
 | Reapertura | Solo un administrador, con motivo. Conserva los resultados de cada cierre anterior. |
+| Eliminar elección | Solo un administrador, escribiendo BORRAR y su contraseña. La base de datos exige un inicio de sesión con contraseña de menos de 5 minutos (claim `amr`). Queda un resumen en el historial. |
 | `/admin` | Indicadores, tabla general de resultados con filtros y vista móvil, departamentos, candidatos con fotos, elecciones, usuarios e historial. |
 
 ## Roles
@@ -57,6 +58,7 @@ Migraciones en [`supabase/migrations`](supabase/migrations):
 6. `cargos_manuales_retiros`: cargos asignados por el operador (`assign_cargo`), quitar el último voto de un candidato
    (`annul_last_vote`), retirar/restaurar candidatos (`withdraw_candidate`, `restore_candidate`) y nuevas reglas de cierre.
    Elimina el desempate por orden (`resolve_tie`).
+7. `eliminar_eleccion`: `delete_election`, borrado completo de una elección con reautenticación del administrador.
 
 Garantías de integridad:
 

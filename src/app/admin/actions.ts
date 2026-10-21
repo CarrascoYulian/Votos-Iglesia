@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { errorMessage } from "@/lib/format";
 import type { ActionResult, AppRole } from "@/lib/types";
@@ -174,6 +175,44 @@ export async function closeElection(id: string, notes: string) {
 
 export async function reopenElection(id: string, reason: string) {
   return run((s) => s.rpc("reopen_election", { p_election_id: id, p_reason: reason }), [`/admin/elecciones/${id}`, "/admin", "/admin/resultados"], "Elección reabierta.");
+}
+
+/**
+ * Elimina una elección completa. Verifica la contraseña del administrador con Supabase Auth
+ * (sesión temporal, no reemplaza la actual) y llama a delete_election con ese token recién
+ * emitido: la base de datos exige un inicio de sesión con contraseña de hace menos de 5 minutos.
+ */
+export async function deleteElection(id: string, password: string, confirmText: string): Promise<ActionResult & { departmentId?: string }> {
+  if (confirmText.trim().toUpperCase() !== "BORRAR") return { ok: false, error: "Escribe BORRAR para confirmar." };
+  if (!password) return { ok: false, error: "Escribe tu contraseña." };
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user?.email) return { ok: false, error: "Tu sesión expiró. Vuelve a iniciar sesión." };
+
+    const verifier = createSupabaseClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+    });
+    const { data: auth, error: authError } = await verifier.auth.signInWithPassword({ email: user.email, password });
+    if (authError || !auth.session || auth.user.id !== user.id) {
+      return { ok: false, error: /rate|too many/i.test(authError?.message ?? "") ? "Demasiados intentos. Espera unos minutos." : "Contraseña incorrecta." };
+    }
+    try {
+      const { data, error } = await verifier.rpc("delete_election", { p_election_id: id, p_confirm: confirmText });
+      if (error) return { ok: false, error: friendly(errorMessage(error)) };
+      const departmentId = data as string;
+      revalidatePath("/admin");
+      revalidatePath(`/admin/departamentos/${departmentId}`);
+      revalidatePath("/admin/resultados");
+      return { ok: true, message: "Elección eliminada.", departmentId };
+    } finally {
+      await verifier.auth.signOut({ scope: "local" });
+    }
+  } catch (err) {
+    return { ok: false, error: errorMessage(err) };
+  }
 }
 
 // ----------------------------------------------------------------------------- Usuarios

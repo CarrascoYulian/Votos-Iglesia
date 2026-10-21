@@ -13,6 +13,7 @@ const ACTION_LABEL: Record<string, string> = {
   "elections.reabrir": "Elección reabierta",
   "elections.resolver_empate": "Empate resuelto",
   "elections.asignar_cargo": "Cargo asignado",
+  "elections.eliminar": "Elección eliminada",
   "elections.retirar_candidato": "Candidato retirado de la elección",
   "elections.restaurar_candidato": "Candidato restaurado en la elección",
   "election_candidates.insert": "Candidato incluido en la elección",
@@ -35,6 +36,8 @@ function summary(log: AuditLog, names: Record<string, string>) {
       return `De ${name(d.de)} a ${name(d.a)} — motivo: ${d.motivo}`;
     case "elections.reabrir":
       return `Motivo: ${d.motivo}`;
+    case "elections.eliminar":
+      return `${d.titulo} (${d.departamento}) — ${d.votos_validos} votos válidos`;
     case "elections.asignar_cargo":
       return `${name(d.candidato)}: ${d.cargo ?? "sin cargo"}`;
     case "elections.retirar_candidato":
