@@ -176,10 +176,6 @@ export async function reopenElection(id: string, reason: string) {
   return run((s) => s.rpc("reopen_election", { p_election_id: id, p_reason: reason }), [`/admin/elecciones/${id}`, "/admin", "/admin/resultados"], "Elección reabierta.");
 }
 
-export async function resolveTie(id: string, orderedIds: string[], reason: string) {
-  return run((s) => s.rpc("resolve_tie", { p_election_id: id, p_ordered_candidate_ids: orderedIds, p_reason: reason }), [`/admin/elecciones/${id}`], "Empate resuelto.");
-}
-
 // ----------------------------------------------------------------------------- Usuarios
 export async function setUserRole(userId: string, role: AppRole, canCorrect: boolean) {
   return run((s) => s.rpc("set_user_role", { p_user_id: userId, p_role: role, p_can_correct: canCorrect }), ["/admin/usuarios"], "Permisos actualizados.");

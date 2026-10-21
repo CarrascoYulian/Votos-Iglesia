@@ -50,10 +50,20 @@ export interface Standing {
   votes: number;
   posicion: number;
   cargo: string | null;
+  /** El 1er lugar sin empate recibe el primer cargo automáticamente. */
+  cargo_auto: boolean;
   tied: boolean;
+  /** Empate en el 1er lugar sin decidir quién recibe el primer cargo. */
   tie_unresolved: boolean;
   tiebreak_rank: number | null;
   ballot_order: number;
+}
+
+export interface WithdrawnCandidate {
+  candidate_id: string;
+  full_name: string;
+  withdrawn_at: string;
+  withdraw_reason: string | null;
 }
 
 export interface Vote {

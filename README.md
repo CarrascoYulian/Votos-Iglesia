@@ -19,10 +19,12 @@ No se pide ningún dato de los votantes.
 |---|---|
 | Conteo (`/conteo/[id]`) | Una tarjeta por candidato con foto, votos, posición y cargo provisional, y un botón `+1 voto`. Tiempo real entre varias pantallas. |
 | Idempotencia | Cada pulsación lleva un `operation_id` único. Si falla la red, **Reintentar** reenvía el mismo id y el voto no se duplica. |
-| Correcciones | Anular o reasignar un voto con motivo obligatorio. El voto original nunca se borra; todo queda en `vote_adjustments` y `audit_logs`. |
-| Clasificación | Se calcula en la base de datos desde los votos guardados. Detecta los empates que afectan a los cargos. |
-| Desempates | El administrador fija el orden (p. ej. tras una segunda votación) y explica el motivo. Si cambian los votos, el desempate se borra. |
-| Cierre | Solo se cierra sin empates pendientes. Guarda una instantánea definitiva (`election_results`), quién cerró y cuándo, y bloquea nuevos votos. |
+| Quitar voto | Botón `−1` en cada candidato (o "Quitar" en la lista de votos) con motivo: "Se marcó por error", "Voto nulo" u otro. El voto no se borra: queda marcado y auditado. |
+| Reasignar | Pasar un voto al candidato correcto (operadores con permiso "puede reasignar" y administradores). |
+| Retirar candidato | Durante el conteo se puede retirar a un candidato de la elección (y restaurarlo). Sus votos se conservan pero no cuentan mientras esté retirado. En preparación simplemente se quita de la papeleta. |
+| Clasificación | Se calcula en la base de datos desde los votos guardados (posición por número de votos). |
+| Cargos | El 1er lugar (sin empate) recibe automáticamente el primer cargo de la lista (p. ej. Presidente). Los demás cargos los asigna quien está contando, al terminar los votos. Si hay empate en el 1er lugar, el operador elige a quién darle el primer cargo. |
+| Cierre | Solo se cierra con el primer cargo definido y sin cargos repetidos de más. Guarda una instantánea definitiva (`election_results`), quién cerró y cuándo, y bloquea nuevos votos. |
 | Reapertura | Solo un administrador, con motivo. Conserva los resultados de cada cierre anterior. |
 | `/admin` | Indicadores, tabla general de resultados con filtros y vista móvil, departamentos, candidatos con fotos, elecciones, usuarios e historial. |
 
@@ -30,14 +32,14 @@ No se pide ningún dato de los votantes.
 
 | Rol | Puede |
 |---|---|
-| **Administrador** | Todo: departamentos, candidatos, fotos, elecciones, inicio, cierre, reapertura, desempates, usuarios y correcciones. |
-| **Operador de conteo** | Registrar votos en las elecciones que tenga asignadas. Con "puede corregir" también anula o reasigna votos. |
+| **Administrador** | Todo: departamentos, candidatos, fotos, elecciones, inicio, cierre, reapertura, usuarios y correcciones. |
+| **Operador de conteo** | En las elecciones que tenga asignadas: registrar y quitar votos, retirar/restaurar candidatos y asignar cargos. Con "puede reasignar" también pasa un voto a otro candidato. |
 | **Consulta** | Ver resultados e historial. No registra ni modifica votos. |
 | **Pendiente** | Nada (cuenta recién creada, sin aprobar). |
 
 Los permisos se comprueban en tres capas: interfaz, servidor (Server Actions y middleware) y **base de datos** (RLS y
 funciones `security definer` que validan el rol). Nadie puede insertar, editar ni borrar votos directamente: solo
-mediante `register_vote`, `annul_vote` y `reassign_vote`.
+mediante `register_vote`, `annul_vote`, `annul_last_vote` y `reassign_vote`.
 
 ## Base de datos
 
@@ -52,6 +54,9 @@ Migraciones en [`supabase/migrations`](supabase/migrations):
 4. `admin_inicial`: correo que recibe el rol de administrador al confirmar su cuenta. **Cámbialo antes de aplicarlo en
    otro proyecto.**
 5. `revocar_funciones_internas`: impide llamar a las funciones de disparadores por la API.
+6. `cargos_manuales_retiros`: cargos asignados por el operador (`assign_cargo`), quitar el último voto de un candidato
+   (`annul_last_vote`), retirar/restaurar candidatos (`withdraw_candidate`, `restore_candidate`) y nuevas reglas de cierre.
+   Elimina el desempate por orden (`resolve_tie`).
 
 Garantías de integridad:
 
@@ -96,4 +101,5 @@ La aplicación **no usa la clave `service_role`**.
 3. En `/admin/departamentos`, crea los departamentos y candidatos y sube sus fotografías.
 4. Crea la elección (título y cargos en orden), revisa los candidatos, asigna operadores e **inicia el conteo**.
 5. Los operadores solicitan cuenta y el administrador les asigna el rol en `/admin/usuarios`.
-6. Al terminar, revisa la clasificación, resuelve los empates si los hay y **cierra la elección**.
+6. Al terminar de leer los papeles, el operador **asigna los cargos** (el 1er lugar ya tiene el primero) y el administrador
+   **cierra la elección**.

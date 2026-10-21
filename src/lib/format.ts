@@ -34,9 +34,10 @@ export const ROLE_LABEL: Record<AppRole, string> = {
   admin: "Administrador",
 };
 
-export function cargoLabel(s: Pick<Standing, "cargo" | "tie_unresolved">) {
-  if (s.tie_unresolved) return "Empate por resolver";
-  return s.cargo ?? "Sin cargo";
+export function cargoLabel(s: Pick<Standing, "cargo" | "tie_unresolved">, status?: ElectionStatus) {
+  if (s.tie_unresolved) return "Empate en 1er lugar";
+  if (s.cargo) return s.cargo;
+  return status === "cerrada" ? "Sin cargo" : "Cargo por asignar";
 }
 
 export function votesLabel(n: number) {

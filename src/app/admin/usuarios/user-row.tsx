@@ -43,7 +43,7 @@ export default function UserRow({ user, isSelf }: { user: Profile; isSelf: boole
         {role === "operador" && (
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={canCorrect} onChange={(e) => setCanCorrect(e.target.checked)} />
-            Puede corregir votos
+            Puede reasignar votos
           </label>
         )}
         <button className="btn-primary px-3 py-2" disabled={!dirty || pending} onClick={save}>

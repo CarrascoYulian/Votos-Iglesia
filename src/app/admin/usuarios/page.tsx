@@ -32,12 +32,12 @@ export default async function UsuariosPage() {
       </div>
       <div className="mt-6 grid gap-3 text-sm text-muted sm:grid-cols-3">
         <p className="card p-4">
-          <strong className="text-ink">Administrador:</strong> gestiona departamentos, candidatos, usuarios, inicia y cierra elecciones, resuelve
-          empates y autoriza reaperturas.
+          <strong className="text-ink">Administrador:</strong> gestiona departamentos, candidatos, usuarios, inicia y cierra elecciones y autoriza
+          reaperturas.
         </p>
         <p className="card p-4">
-          <strong className="text-ink">Operador de conteo:</strong> registra votos en las elecciones que se le asignen. Con “puede corregir”
-          también anula o reasigna votos.
+          <strong className="text-ink">Operador de conteo:</strong> registra y quita votos, retira candidatos y asigna cargos en las elecciones que se le asignen. Con
+          “puede reasignar” también pasa un voto al candidato correcto.
         </p>
         <p className="card p-4">
           <strong className="text-ink">Consulta:</strong> ve resultados e historial, sin registrar ni modificar votos.

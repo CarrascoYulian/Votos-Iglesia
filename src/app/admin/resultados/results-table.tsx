@@ -118,7 +118,7 @@ export default function ResultsTable({ rows }: { rows: Row[] }) {
                       {r.election_status !== "cerrada" && <span className="block text-[10px] uppercase text-amber-700">provisional</span>}
                     </td>
                     <td className={`px-4 py-2.5 ${r.tie_unresolved ? "font-semibold text-amber-700" : ""}`}>
-                      {r.election_status === "preparacion" ? "Pendiente" : cargoLabel(r)}
+                      {r.election_status === "preparacion" ? "Pendiente" : cargoLabel(r, r.election_status)}
                     </td>
                     <td className="px-4 py-2.5">
                       <StatusBadge status={r.election_status} />
@@ -149,7 +149,7 @@ export default function ResultsTable({ rows }: { rows: Row[] }) {
                 <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                   <span className="badge bg-navy-50 text-navy-800">{r.posicion}º lugar</span>
                   <span className={`badge ${r.tie_unresolved ? "bg-amber-100 text-amber-800" : "bg-gold-50 text-gold-700"}`}>
-                    {r.election_status === "preparacion" ? "Cargo pendiente" : cargoLabel(r)}
+                    {r.election_status === "preparacion" ? "Cargo pendiente" : cargoLabel(r, r.election_status)}
                   </span>
                   <StatusBadge status={r.election_status} />
                 </div>

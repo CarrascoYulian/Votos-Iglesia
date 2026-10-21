@@ -3,8 +3,11 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui";
-import type { ActionResult, ElectionStatus, Standing } from "@/lib/types";
-import { assignOperator, closeElection, reopenElection, resolveTie, setElectionCandidates, startElection } from "../../actions";
+import { CargoAssigner } from "@/components/cargo-assigner";
+import { createClient } from "@/lib/supabase/client";
+import { errorMessage, formatDateTime } from "@/lib/format";
+import type { ActionResult, ElectionStatus, Standing, WithdrawnCandidate } from "@/lib/types";
+import { assignOperator, closeElection, reopenElection, setElectionCandidates, startElection } from "../../actions";
 
 function Result({ result }: { result: ActionResult | null }) {
   if (!result) return null;
@@ -36,12 +39,14 @@ function useAction() {
 export function LifecycleControls({
   electionId,
   status,
-  hasUnresolvedTie,
+  problems,
+  vacant,
   totalVotes,
 }: {
   electionId: string;
   status: ElectionStatus;
-  hasUnresolvedTie: boolean;
+  problems: string[];
+  vacant: string[];
   totalVotes: number;
 }) {
   const { pending, result, run } = useAction();
@@ -67,11 +72,11 @@ export function LifecycleControls({
           <a href={`/conteo/${electionId}`} className="btn-primary w-full py-3">
             Abrir pantalla de conteo
           </a>
-          <button className="btn-outline w-full" onClick={() => setDialog("cerrar")} disabled={hasUnresolvedTie}>
+          <button className="btn-outline w-full" onClick={() => setDialog("cerrar")} disabled={problems.length > 0}>
             Finalizar y cerrar elección
           </button>
-          {hasUnresolvedTie && (
-            <p className="text-xs font-medium text-amber-700">Resuelve los empates que afectan cargos antes de cerrar.</p>
+          {problems.length > 0 && (
+            <p className="text-xs font-medium text-amber-700">Corrige la asignación de cargos antes de cerrar.</p>
           )}
         </>
       )}
@@ -106,8 +111,13 @@ export function LifecycleControls({
                 <h2 className="font-display text-lg font-bold text-navy-900">Cerrar la elección</h2>
                 <p className="text-sm text-muted">
                   Se guardarán los resultados definitivos ({totalVotes} votos válidos), se registrará quién cerró y cuándo, y no se aceptarán más votos.
-                  Revisa la clasificación antes de confirmar.
+                  Revisa la clasificación y los cargos antes de confirmar.
                 </p>
+                {vacant.length > 0 && (
+                  <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    Cargos sin asignar: <strong>{vacant.join(", ")}</strong>. Si cierras así, quedarán vacantes.
+                  </p>
+                )}
                 <textarea className="input min-h-20" placeholder="Notas del cierre (opcional)" value={text} onChange={(e) => setText(e.target.value)} />
                 <div>
                   <label className="label" htmlFor="confirm-close">
@@ -219,7 +229,7 @@ export function OperatorAssign({
             <li key={o.id} className="flex items-center justify-between gap-2 rounded-xl border border-line px-3 py-2">
               <span className="min-w-0 text-sm">
                 <span className="block truncate font-medium">{o.label}</span>
-                <span className="text-xs text-muted">{o.can_correct ? "Puede corregir votos" : "Sin permiso de corrección"}</span>
+                <span className="text-xs text-muted">{o.can_correct ? "Puede reasignar votos" : "Puede quitar votos"}</span>
               </span>
               <button
                 className={on ? "btn-outline px-3 py-1.5 text-xs" : "btn-primary px-3 py-1.5 text-xs"}
@@ -237,63 +247,105 @@ export function OperatorAssign({
   );
 }
 
-// ----------------------------------------------------------------------------- Desempate
-export function TieResolver({ electionId, groups, photos }: { electionId: string; groups: Standing[][]; photos: Record<string, string> }) {
-  return (
-    <div className="space-y-4">
-      {groups.map((g) => (
-        <TieGroup key={g.map((s) => s.candidate_id).join()} electionId={electionId} group={g} photos={photos} />
-      ))}
-    </div>
-  );
+// ----------------------------------------------------------------------------- Cargos
+export function AdminCargoAssigner(props: {
+  electionId: string;
+  cargos: string[];
+  standings: Standing[];
+  photos: Record<string, string | null>;
+}) {
+  const router = useRouter();
+  return <CargoAssigner {...props} onChanged={() => router.refresh()} />;
 }
 
-function TieGroup({ electionId, group, photos }: { electionId: string; group: Standing[]; photos: Record<string, string> }) {
-  const { pending, result, run } = useAction();
-  const [order, setOrder] = useState(group.map((s) => s.candidate_id));
+// ----------------------------------------------------------------------------- Retirar / restaurar candidatos (conteo abierto)
+export function CandidatesManager({
+  electionId,
+  active,
+  withdrawn,
+}: {
+  electionId: string;
+  active: { candidate_id: string; full_name: string }[];
+  withdrawn: WithdrawnCandidate[];
+}) {
+  const router = useRouter();
+  const [target, setTarget] = useState<string | null>(null);
   const [reason, setReason] = useState("");
-  const byId = Object.fromEntries(group.map((s) => [s.candidate_id, s]));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function move(i: number, dir: -1 | 1) {
-    const j = i + dir;
-    if (j < 0 || j >= order.length) return;
-    const next = [...order];
-    [next[i], next[j]] = [next[j], next[i]];
-    setOrder(next);
+  async function call(fn: () => PromiseLike<{ error: { message: string } | null }>) {
+    setBusy(true);
+    setError(null);
+    const { error } = await fn();
+    setBusy(false);
+    if (error) return setError(errorMessage(error));
+    setTarget(null);
+    setReason("");
+    router.refresh();
   }
 
+  const supabase = createClient();
   return (
-    <div className="rounded-xl border border-amber-300 bg-amber-50 p-4">
-      <p className="mb-3 text-sm font-semibold text-amber-900">
-        Empate a {group[0].votes} votos en la posición {group[0].posicion}. Ordena según la decisión tomada (1 = mejor posición):
-      </p>
-      <ol className="space-y-2">
-        {order.map((id, i) => (
-          <li key={id} className="flex items-center gap-3 rounded-lg bg-white px-3 py-2">
-            <span className="font-display w-5 font-bold text-gold-700">{i + 1}</span>
-            <Avatar name={byId[id].full_name} url={byId[id].photo_path ? photos[byId[id].photo_path!] : null} size={32} />
-            <span className="flex-1 truncate text-sm font-medium">{byId[id].full_name}</span>
-            <button className="btn-ghost px-2 py-1" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Subir">
-              ↑
-            </button>
-            <button className="btn-ghost px-2 py-1" onClick={() => move(i, 1)} disabled={i === order.length - 1} aria-label="Bajar">
-              ↓
-            </button>
+    <div className="space-y-3">
+      <ul className="divide-y divide-line">
+        {active.map((c) => (
+          <li key={c.candidate_id} className="py-2 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-medium text-ink">{c.full_name}</span>
+              {target !== c.candidate_id && (
+                <button className="text-xs font-semibold text-red-700 hover:underline" onClick={() => setTarget(c.candidate_id)}>
+                  Retirar
+                </button>
+              )}
+            </div>
+            {target === c.candidate_id && (
+              <div className="mt-2 space-y-2">
+                <input className="input" placeholder="Motivo del retiro" value={reason} onChange={(e) => setReason(e.target.value)} />
+                <div className="flex gap-2">
+                  <button
+                    className="btn-danger px-3 py-1.5 text-xs"
+                    disabled={busy || reason.trim().length < 5}
+                    onClick={() =>
+                      call(() => supabase.rpc("withdraw_candidate", { p_election_id: electionId, p_candidate_id: c.candidate_id, p_reason: reason }))
+                    }
+                  >
+                    {busy ? "Guardando…" : "Confirmar retiro"}
+                  </button>
+                  <button className="btn-outline px-3 py-1.5 text-xs" onClick={() => setTarget(null)}>
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            )}
           </li>
         ))}
-      </ol>
-      <textarea
-        className="input mt-3 min-h-16"
-        placeholder="¿Cómo se resolvió? Ej.: segunda votación a mano alzada, sorteo público…"
-        value={reason}
-        onChange={(e) => setReason(e.target.value)}
-      />
-      <button className="btn-primary mt-3" disabled={pending || reason.trim().length < 5} onClick={() => run(() => resolveTie(electionId, order, reason))}>
-        {pending ? "Guardando…" : "Confirmar desempate"}
-      </button>
-      <div className="mt-2">
-        <Result result={result} />
-      </div>
+      </ul>
+      {withdrawn.length > 0 && (
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">Retirados</p>
+          <ul className="divide-y divide-line">
+            {withdrawn.map((w) => (
+              <li key={w.candidate_id} className="flex items-center justify-between gap-2 py-2 text-sm">
+                <span className="min-w-0">
+                  <span className="block font-medium text-muted line-through">{w.full_name}</span>
+                  <span className="block text-xs text-muted">
+                    {formatDateTime(w.withdrawn_at)} · {w.withdraw_reason}
+                  </span>
+                </span>
+                <button
+                  className="btn-outline px-3 py-1.5 text-xs"
+                  disabled={busy}
+                  onClick={() => call(() => supabase.rpc("restore_candidate", { p_election_id: electionId, p_candidate_id: w.candidate_id }))}
+                >
+                  Restaurar
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>}
     </div>
   );
 }

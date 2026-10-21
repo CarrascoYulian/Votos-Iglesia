@@ -6,9 +6,10 @@ import { PageHeader, ResultKindBadge, StatusBadge } from "@/components/ui";
 import { requireRole } from "@/lib/auth";
 import { formatDateTime } from "@/lib/format";
 import { signPhotos } from "@/lib/photos";
-import type { AuditLog, Candidate, Election, Profile, Standing, VoteAdjustment } from "@/lib/types";
+import { cargoProblems, vacantCargos } from "@/lib/cargos";
+import type { AuditLog, Candidate, Election, Profile, Standing, VoteAdjustment, WithdrawnCandidate } from "@/lib/types";
 import { updateElection } from "../../actions";
-import { CandidateSelector, LifecycleControls, OperatorAssign, TieResolver } from "./controls";
+import { AdminCargoAssigner, CandidateSelector, CandidatesManager, LifecycleControls, OperatorAssign } from "./controls";
 
 type ElectionRow = Election & { departments: { id: string; name: string } | null };
 type ResultSnapshot = { closing_number: number; full_name: string; votes: number; posicion: number; cargo: string | null; created_at: string };
@@ -25,7 +26,7 @@ export default async function EleccionPage({ params }: { params: Promise<{ id: s
     await Promise.all([
       supabase.rpc("election_standings", { p_election_id: id }),
       supabase.from("candidates").select("*").eq("department_id", election.department_id).order("full_name").returns<Candidate[]>(),
-      supabase.from("election_candidates").select("candidate_id, ballot_order").eq("election_id", id).order("ballot_order"),
+      supabase.from("election_candidates").select("candidate_id, ballot_order, withdrawn_at, withdraw_reason").eq("election_id", id).order("ballot_order"),
       supabase.from("votes").select("id", { count: "exact", head: true }).eq("election_id", id).is("voided_at", null),
       supabase.from("votes").select("id", { count: "exact", head: true }).eq("election_id", id).not("voided_at", "is", null),
       supabase.from("vote_adjustments").select("*").eq("election_id", id).order("created_at", { ascending: false }).returns<VoteAdjustment[]>(),
@@ -48,13 +49,17 @@ export default async function EleccionPage({ params }: { params: Promise<{ id: s
   const names = Object.fromEntries(candidates.map((c) => [c.id, c.full_name]));
   const people = Object.fromEntries((profilesRes.data ?? []).map((p) => [p.id, p.full_name || p.email]));
 
-  const unresolved = standings.filter((s) => s.tie_unresolved);
-  const tieGroups = Object.values(
-    unresolved.reduce<Record<number, Standing[]>>((acc, s) => {
-      (acc[s.votes] ??= []).push(s);
-      return acc;
-    }, {}),
-  );
+  const problems = cargoProblems(election.cargos, standings);
+  const vacant = vacantCargos(election.cargos, standings);
+  const photoById = Object.fromEntries(candidates.map((c) => [c.id, c.photo_path ? (photos[c.photo_path] ?? null) : null]));
+  const withdrawn: WithdrawnCandidate[] = (ecRes.data ?? [])
+    .filter((r) => r.withdrawn_at)
+    .map((r) => ({
+      candidate_id: r.candidate_id as string,
+      full_name: names[r.candidate_id as string] ?? "",
+      withdrawn_at: r.withdrawn_at as string,
+      withdraw_reason: r.withdraw_reason as string | null,
+    }));
 
   const snapshots = Object.entries(
     (snapshotsRes.data ?? []).reduce<Record<number, ResultSnapshot[]>>((acc, r) => {
@@ -108,14 +113,10 @@ export default async function EleccionPage({ params }: { params: Promise<{ id: s
             </div>
           </section>
 
-          {isAdmin && election.status === "en_curso" && tieGroups.length > 0 && (
+          {isAdmin && election.status === "en_curso" && election.cargos.length > 0 && (
             <section className="card p-5">
-              <h2 className="font-display mb-1 text-lg font-bold text-navy-900">Empates por resolver</h2>
-              <p className="mb-4 text-sm text-muted">
-                Estos empates impiden asignar cargos. Resuélvelos (por ejemplo con una segunda votación) antes de cerrar. Si después cambian los
-                votos, el desempate se borra automáticamente.
-              </p>
-              <TieResolver electionId={id} groups={tieGroups} photos={photos} />
+              <h2 className="font-display mb-3 text-lg font-bold text-navy-900">Asignación de cargos</h2>
+              <AdminCargoAssigner electionId={id} cargos={election.cargos} standings={standings} photos={photoById} />
             </section>
           )}
 
@@ -125,21 +126,21 @@ export default async function EleccionPage({ params }: { params: Promise<{ id: s
               <CandidateSelector
                 electionId={id}
                 candidates={candidates.map((c) => ({ id: c.id, full_name: c.full_name, active: c.active, photo_url: c.photo_path ? (photos[c.photo_path] ?? null) : null }))}
-                selected={(ecRes.data ?? []).map((r) => r.candidate_id as string)}
+                selected={(ecRes.data ?? []).filter((r) => !r.withdrawn_at).map((r) => r.candidate_id as string)}
               />
             </section>
           )}
 
           <section className="card p-5">
-            <h2 className="font-display mb-3 text-lg font-bold text-navy-900">Correcciones de votos</h2>
+            <h2 className="font-display mb-3 text-lg font-bold text-navy-900">Votos quitados y correcciones</h2>
             {!adjRes.data?.length ? (
-              <p className="text-sm text-muted">No se han corregido votos.</p>
+              <p className="text-sm text-muted">No se han quitado ni corregido votos.</p>
             ) : (
               <ul className="divide-y divide-line">
                 {adjRes.data.map((a) => (
                   <li key={a.id} className="py-2.5 text-sm">
                     <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <span className="font-semibold">{a.kind === "anulacion" ? "Anulación" : "Reasignación"}</span>
+                      <span className="font-semibold">{a.kind === "anulacion" ? "Voto quitado" : "Reasignación"}</span>
                       <span className="text-xs text-muted">{formatDateTime(a.created_at)}</span>
                     </div>
                     <p className="text-xs text-muted">
@@ -185,8 +186,21 @@ export default async function EleccionPage({ params }: { params: Promise<{ id: s
               <LifecycleControls
                 electionId={id}
                 status={election.status}
-                hasUnresolvedTie={unresolved.length > 0}
+                problems={problems}
+                vacant={vacant}
                 totalVotes={votesValid.count ?? 0}
+              />
+            </section>
+          )}
+
+          {isAdmin && election.status === "en_curso" && (
+            <section className="card p-5">
+              <h2 className="font-display mb-1 text-lg font-bold text-navy-900">Candidatos en la elección</h2>
+              <p className="mb-3 text-xs text-muted">Retirar a alguien lo quita de la papeleta; sus votos se conservan y vuelven a contar si lo restauras.</p>
+              <CandidatesManager
+                electionId={id}
+                active={standings.map((s) => ({ candidate_id: s.candidate_id, full_name: s.full_name }))}
+                withdrawn={withdrawn}
               />
             </section>
           )}

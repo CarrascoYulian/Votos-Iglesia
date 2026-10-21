@@ -12,11 +12,14 @@ const ACTION_LABEL: Record<string, string> = {
   "elections.cerrar": "Elección cerrada",
   "elections.reabrir": "Elección reabierta",
   "elections.resolver_empate": "Empate resuelto",
+  "elections.asignar_cargo": "Cargo asignado",
+  "elections.retirar_candidato": "Candidato retirado de la elección",
+  "elections.restaurar_candidato": "Candidato restaurado en la elección",
   "election_candidates.insert": "Candidato incluido en la elección",
   "election_candidates.delete": "Candidato retirado de la elección",
   "election_operators.insert": "Operador asignado",
   "election_operators.delete": "Operador retirado",
-  "votes.anular": "Voto anulado",
+  "votes.anular": "Voto quitado",
   "votes.reasignar": "Voto reasignado",
   "profiles.permisos": "Permisos de usuario cambiados",
   "profiles.bootstrap_admin": "Administrador inicial activado",
@@ -32,6 +35,12 @@ function summary(log: AuditLog, names: Record<string, string>) {
       return `De ${name(d.de)} a ${name(d.a)} — motivo: ${d.motivo}`;
     case "elections.reabrir":
       return `Motivo: ${d.motivo}`;
+    case "elections.asignar_cargo":
+      return `${name(d.candidato)}: ${d.cargo ?? "sin cargo"}`;
+    case "elections.retirar_candidato":
+      return `${name(d.candidato)} — motivo: ${d.motivo}`;
+    case "elections.restaurar_candidato":
+      return name(d.candidato);
     case "elections.resolver_empate":
       return `Orden: ${(d.orden as string[]).map(name).join(" › ")} — ${d.motivo}`;
     case "elections.cerrar":

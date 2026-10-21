@@ -35,9 +35,9 @@ export function StandingsList({
                 <div className="h-full rounded-full bg-navy-700" style={{ width: `${pct}%` }} />
               </div>
               <p className={`mt-1 text-xs ${s.tie_unresolved ? "font-semibold text-amber-700" : "text-muted"}`}>
-                {status === "preparacion" ? "Cargo pendiente" : cargoLabel(s)}
-                {status === "en_curso" && !s.tie_unresolved && s.cargo && " · provisional"}
-                {s.tiebreak_rank && " · definido por desempate"}
+                {status === "preparacion" ? "Cargo pendiente" : cargoLabel(s, status)}
+                {s.cargo_auto && " · automático por 1er lugar"}
+                {status === "en_curso" && s.cargo && " · provisional"}
               </p>
             </div>
           </li>
